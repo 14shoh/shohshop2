@@ -1,58 +1,59 @@
-// src/components/PhoneAuth.js
-import React, { useState, useEffect } from 'react';
-import { auth, RecaptchaVerifier, signInWithPhoneNumber } from '../firebase';
+// src/components/Login.js
+import React, { useState } from 'react';
+import { auth } from '../firebase';
+import { signInWithPhoneNumber, RecaptchaVerifier } from 'firebase/auth';
 
-const PhoneAuth = () => {
+const Login = () => {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
-  const [confirmationResult, setConfirmationResult] = useState(null);
   const [isCodeSent, setIsCodeSent] = useState(false);
-
-  useEffect(() => {
-    if (!window.recaptchaVerifier) {
-      try {
-        window.recaptchaVerifier = new RecaptchaVerifier('recaptcha-container', {
-          size: 'invisible',
-          callback: (response) => {
-            console.log('reCAPTCHA resolved');
-          },
-          'expired-callback': () => {
-            console.log('reCAPTCHA expired');
-          }
-        }, auth);
-        window.recaptchaVerifier.render().catch((error) => {
-          console.error("Error rendering reCAPTCHA:", error);
-        });
-      } catch (error) {
-        console.error("Error initializing reCAPTCHA:", error);
-      }
-    }
-  }, []);
+  const [confirmationResult, setConfirmationResult] = useState(null);
+  const [error, setError] = useState(null);
 
   const handleSendCode = async (e) => {
     e.preventDefault();
-    console.log('Sending code to:', phoneNumber); // Логирование номера телефона
-    const appVerifier = window.recaptchaVerifier;
+    setError(null);
+
     try {
-      const result = await signInWithPhoneNumber(auth, phoneNumber, appVerifier);
-      setConfirmationResult(result);
+      // Убедитесь, что reCAPTCHA контейнер существует в DOM
+      if (!document.getElementById('recaptcha-container')) {
+        const recaptchaContainer = document.createElement('div');
+        recaptchaContainer.id = 'recaptcha-container';
+        document.body.appendChild(recaptchaContainer);
+      }
+
+      window.recaptchaVerifier = new RecaptchaVerifier('recaptcha-container', {
+        'size': 'invisible',
+        'callback': (response) => {
+          console.log('reCAPTCHA solved');
+        },
+        'expired-callback': () => {
+          console.log('reCAPTCHA expired');
+        }
+      }, auth);
+      
+      await window.recaptchaVerifier.render();
+
+      const appVerifier = window.recaptchaVerifier;
+      const confirmationResult = await signInWithPhoneNumber(auth, phoneNumber, appVerifier);
+      setConfirmationResult(confirmationResult);
       setIsCodeSent(true);
-      console.log('Code sent successfully'); // Логирование успешной отправки кода
+      console.log('Code sent successfully');
     } catch (error) {
-      console.error("Error during signInWithPhoneNumber:", error);
+      setError('Error sending code: ' + error.message);
     }
   };
 
   const handleVerifyCode = async (e) => {
     e.preventDefault();
-    console.log('Verifying code:', verificationCode); // Логирование кода подтверждения
+    setError(null);
+
     if (confirmationResult) {
       try {
         const result = await confirmationResult.confirm(verificationCode);
-        const user = result.user;
-        console.log('User signed in:', user); // Логирование успешной верификации пользователя
+        console.log('User signed in:', result.user);
       } catch (error) {
-        console.error("Error during code confirmation:", error);
+        setError('Error verifying code: ' + error.message);
       }
     }
   };
@@ -60,6 +61,7 @@ const PhoneAuth = () => {
   return (
     <div>
       <h1>Phone Authentication</h1>
+      {error && <div style={{ color: 'red' }}>{error}</div>}
       {!isCodeSent ? (
         <form onSubmit={handleSendCode}>
           <input
@@ -86,4 +88,4 @@ const PhoneAuth = () => {
   );
 };
 
-export default PhoneAuth;
+export default Login;
